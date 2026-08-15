@@ -610,7 +610,8 @@ void Fader::paintLevels(QPaintEvent* ev, QPainter& painter, bool linear)
 
 	// This linear map performs the following mapping:
 	// Value (dbFS or linear) -> window coordinates of the widget
-	// It is for example used to determine the height of peaks, markers and to define the gradient for the levels
+	// It is for example used to determine the height of peaks, markers and to
+	// colour the discrete LED segments of the levels.
 	const LinearMap<float> valuesToWindowCoordinates(mappedMaxPeak, leftMeterRect.y(), mappedMinPeak, leftMeterRect.y() + leftMeterRect.height());
 
 	// This lambda takes a value (in dbFS or linear) and a rectangle and computes a rectangle
@@ -648,67 +649,76 @@ void Fader::paintLevels(QPaintEvent* ev, QPainter& painter, bool linear)
 		painter.fillRect(unityRectR, m_unityMarker);
 	}
 
-	// These values define where the gradient changes values, i.e. the ranges
-	// for clipping, warning and ok.
-	// Please ensure that "clip starts" is the maximum value and that "ok ends"
-	// is the minimum value and that all other values lie inbetween. Otherwise
-	// there will be warnings when the gradient is defined.
-	const float mappedClipStarts = mapper(dbfsToAmp(0.f));
+	// These values define where the level colour changes, i.e. the thresholds
+	// between the clipping, warning and ok ranges (from top to bottom).
+	// The clip range spans from 0 dBFS (mapper(dbfsToAmp(0.f))) down to the warning
+	// range, so only the warning boundaries are needed to colour the segments:
+	// every segment above the warning range is drawn in the clip colour.
 	const float mappedWarnEnd = mapper(dbfsToAmp(-0.01f));
 	const float mappedWarnStart = mapper(dbfsToAmp(-6.f));
-	const float mappedOkEnd = mapper(dbfsToAmp(-12.f));
 
-	// Prepare the gradient for the meters
-	//
-	// The idea is the following. We want to be able to render arbitrary ranges of min and max values.
-	// Therefore we first compute the start and end point of the gradient in window coordinates.
-	// The gradient is assumed to start with the clip color and to end with the ok color with warning values in between.
-	// We know the min and max peaks that map to a rectangle where we draw the levels. We can use the values of the min and max peaks
-	// as well as the Y-coordinates of the rectangle to compute a map which will give us the coordinates of the value where the clipping
-	// starts and where the ok area end. These coordinates are used to initialize the gradient. Please note that the gradient might thus
-	// extend the rectangle into which we paint.
-	float clipStartYCoord = valuesToWindowCoordinates.map(mappedClipStarts);
-	float okEndYCoord = valuesToWindowCoordinates.map(mappedOkEnd);
+	// FL Studio look: instead of a continuous QLinearGradient, the level meters are
+	// drawn as stacked DISCRETE LED segments. Each segment is segmentHeight px tall
+	// and separated from the next by segmentGap px, and is coloured by threshold:
+	// green (m_peakOk, bottom) -> yellow (m_peakWarn) -> red (m_peakClip, top).
+	// The persistent peak (crest) stays a solid 1 px bright red #FF5050.
+	constexpr int segmentHeight = 3;
+	constexpr int segmentGap = 1;
+	constexpr int segmentPitch = segmentHeight + segmentGap;
 
-	QLinearGradient linearGrad(0, clipStartYCoord, 0, okEndYCoord);
+	// Peak hold (crest) colour. FL approximate value, to be locked with the palette.
+	const QColor persistentPeakColor(255, 80, 80); // #FF5050
 
-	// We already know for the gradient that the clip color will be at 0 and that the ok color is at 1.
-	// What's left to do is to map the inbetween values into the interval [0,1].
-	const LinearMap<float> mapBetweenClipAndOk(mappedClipStarts, 0.f, mappedOkEnd, 1.f);
+	// Map the colour thresholds (in value space) to window Y coordinates so a
+	// segment colour can be picked by simply comparing its top Y coordinate.
+	const float warnEndYCoord = valuesToWindowCoordinates.map(mappedWarnEnd);
+	const float warnStartYCoord = valuesToWindowCoordinates.map(mappedWarnStart);
 
-	linearGrad.setColorAt(0, m_peakClip);
-	linearGrad.setColorAt(mapBetweenClipAndOk.map(mappedWarnEnd), m_peakWarn);
-	linearGrad.setColorAt(mapBetweenClipAndOk.map(mappedWarnStart), m_peakWarn);
-	linearGrad.setColorAt(1, m_peakOk);
-
-	// Draw left levels
-	if (mappedPeakL > mappedMinPeak)
+	// Returns the LED colour for a segment whose top edge sits at window Y.
+	const auto colorForSegment = [&](float segmentTopY) -> QColor
 	{
-		QPainterPath leftMeterPath;
-		leftMeterPath.addRoundedRect(computeLevelRect(leftMeterRect, mappedPeakL), radius, radius);
-		painter.fillPath(leftMeterPath, linearGrad);
-	}
+		if (segmentTopY < warnEndYCoord) { return m_peakClip; }   // clip zone (top)
+		if (segmentTopY < warnStartYCoord) { return m_peakWarn; } // warn zone (middle)
+		return m_peakOk;                                          // ok zone (bottom)
+	};
 
-	// Draw left peaks
+	// Draws one meter level (inside rect, up to peak) as a stack of discrete LED
+	// segments, clipped to the meter's rounded rectangle so the corners stay rounded.
+	const auto paintSegmentedLevel = [&](const QRect& rect, float peak)
+	{
+		if (peak <= mappedMinPeak) { return; }
+
+		const QRect levelRect = computeLevelRect(rect, peak);
+
+		painter.save();
+		QPainterPath levelPath;
+		levelPath.addRoundedRect(levelRect, radius, radius);
+		painter.setClipPath(levelPath);
+
+		for (int y = levelRect.bottom() - segmentHeight;
+			y + segmentHeight > levelRect.top(); y -= segmentPitch)
+		{
+			painter.fillRect(QRect(levelRect.x(), y, levelRect.width(), segmentHeight),
+				colorForSegment(y));
+		}
+
+		painter.restore();
+	};
+
+	// Draw left level and its persistent peak (crest)
+	paintSegmentedLevel(leftMeterRect, mappedPeakL);
 	if (mappedPersistentPeakL > mappedMinPeak)
 	{
 		const auto peakRectL = computePeakRect(leftMeterRect, mappedPersistentPeakL);
-		painter.fillRect(peakRectL, linearGrad);
+		painter.fillRect(peakRectL, persistentPeakColor);
 	}
 
-	// Draw right levels
-	if (mappedPeakR > mappedMinPeak)
-	{
-		QPainterPath rightMeterPath;
-		rightMeterPath.addRoundedRect(computeLevelRect(rightMeterRect, mappedPeakR), radius, radius);
-		painter.fillPath(rightMeterPath, linearGrad);
-	}
-
-	// Draw right peaks
+	// Draw right level and its persistent peak (crest)
+	paintSegmentedLevel(rightMeterRect, mappedPeakR);
 	if (mappedPersistentPeakR > mappedMinPeak)
 	{
 		const auto peakRectR = computePeakRect(rightMeterRect, mappedPersistentPeakR);
-		painter.fillRect(peakRectR, linearGrad);
+		painter.fillRect(peakRectR, persistentPeakColor);
 	}
 
 	painter.restore();

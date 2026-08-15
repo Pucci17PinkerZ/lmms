@@ -62,6 +62,11 @@ public:
 	Q_PROPERTY(QColor tabTextSelected READ tabTextSelected WRITE setTabTextSelected)
 	Q_PROPERTY(QColor tabBackground READ tabBackground WRITE setTabBackground)
 	Q_PROPERTY(QColor tabBorder READ tabBorder WRITE setTabBorder)
+	// Bevel FL Studio (Phase 3) : arête claire (haut/gauche) et sombre (bas/droite)
+	Q_PROPERTY(QColor tabBevelLight READ tabBevelLight WRITE setTabBevelLight)
+	Q_PROPERTY(QColor tabBevelDark READ tabBevelDark WRITE setTabBevelDark)
+	// Fond des onglets inactifs (plus sombre que l'onglet actif rehaussé)
+	Q_PROPERTY(QColor tabInactive READ tabInactive WRITE setTabInactive)
 
 	QColor tabText() const;
 	void setTabText(const QColor & c);
@@ -75,6 +80,12 @@ public:
 	void setTabBackground(const QColor & c);
 	QColor tabBorder() const;
 	void setTabBorder(const QColor & c);
+	QColor tabBevelLight() const;
+	void setTabBevelLight(const QColor & c);
+	QColor tabBevelDark() const;
+	void setTabBevelDark(const QColor & c);
+	QColor tabInactive() const;
+	void setTabInactive(const QColor & c);
 
 protected:
 	bool event(QEvent* event) override;
@@ -110,6 +121,9 @@ private:
 	QColor m_tabTextSelected;// The text color for the selected tab.
 	QColor m_tabBackground; // The TabWidget's background color.
 	QColor m_tabBorder;     // The TabWidget's borders color.
+	QColor m_tabBevelLight; // Bevel FL : arête claire (haut/gauche).
+	QColor m_tabBevelDark;  // Bevel FL : arête sombre (bas/droite).
+	QColor m_tabInactive;   // Fond des onglets inactifs (plus sombre).
 } ;
 
 

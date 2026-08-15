@@ -27,6 +27,7 @@
 
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPixmap>
 #include <QToolTip>
 #include <QWheelEvent>
@@ -37,6 +38,48 @@
 
 namespace lmms::gui
 {
+
+// --- Palette FL Studio (valeurs ≈, à verrouiller — cf. DESIGN-UI.md §1.1) ---------
+// Regroupées ici en constantes nommées (règle du projet : pas d'hex éparpillés).
+// Elles servent uniquement de *défauts* aux qproperty ci-dessous : le QSS du thème
+// peut les surcharger à tout moment via qproperty-tabBevelLight / -tabBevelDark /
+// -tabInactive.
+namespace {
+const QColor FL_BEVEL_LIGHT(0x5C, 0x61, 0x63); // #5C6163 — arête claire (haut/gauche)
+const QColor FL_BEVEL_DARK(0x1B, 0x1E, 0x1F);  // #1B1E1F — arête sombre (bas/droite)
+const QColor FL_TAB_INACTIVE(0x10, 0x12, 0x14); // ≈ #101214 — fond onglet inactif (plus sombre)
+constexpr qreal FL_TAB_CORNER_RADIUS = 2.0;     // "coins ~2px" (DESIGN-UI.md §1.1/§1.3)
+
+// Dessine un onglet au look FL Studio : face plate + bevel 1px + coins arrondis.
+// Le bevel est la "signature FL" : arête claire en haut/gauche, sombre en bas/droite.
+//  - rect        : géométrie de l'onglet
+//  - face        : couleur de fond (actif rehaussé / inactif plus sombre)
+//  - bevelLight  : couleur de l'arête claire (haut/gauche)
+//  - bevelDark   : couleur de l'arête sombre (bas/droite)
+void drawFlTab(QPainter& p, const QRectF& rect, const QColor& face,
+			   const QColor& bevelLight, const QColor& bevelDark)
+{
+	// Face de l'onglet avec coins arrondis (~2px)
+	QPainterPath path;
+	path.addRoundedRect(rect, FL_TAB_CORNER_RADIUS, FL_TAB_CORNER_RADIUS);
+	p.fillPath(path, face);
+
+	// Bevel 1px : on trace d'abord le contour complet en clair…
+	p.setPen(QPen(bevelLight, 1));
+	p.drawPath(path);
+
+	// …puis on repasse en sombre uniquement sur bas + droite, en suivant le coin
+	// arrondi bas-droit (quadTo avec le centre du cercle du coin) pour un rendu net.
+	QPainterPath darkEdge;
+	darkEdge.moveTo(rect.left(), rect.bottom());
+	darkEdge.lineTo(rect.right() - FL_TAB_CORNER_RADIUS, rect.bottom());
+	darkEdge.quadTo(rect.right(), rect.bottom(),
+					rect.right(), rect.bottom() - FL_TAB_CORNER_RADIUS);
+	darkEdge.lineTo(rect.right(), rect.top());
+	p.setPen(QPen(bevelDark, 1));
+	p.drawPath(darkEdge);
+}
+} // namespace
 
 TabWidget::TabWidget(const QString& caption, QWidget* parent, bool usePixmap,
 					 bool resizable) :
@@ -50,7 +93,10 @@ TabWidget::TabWidget(const QString& caption, QWidget* parent, bool usePixmap,
 	m_tabSelected(0, 0, 0),
 	m_tabTextSelected(0, 0, 0),
 	m_tabBackground(0, 0, 0),
-	m_tabBorder(0, 0, 0)
+	m_tabBorder(0, 0, 0),
+	m_tabBevelLight(FL_BEVEL_LIGHT),
+	m_tabBevelDark(FL_BEVEL_DARK),
+	m_tabInactive(FL_TAB_INACTIVE)
 {
 
 	// Create taller tabbar when it's to display artwork tabs
@@ -245,10 +291,13 @@ void TabWidget::paintEvent(QPaintEvent* pe)
 	}
 
 	// Draw all tabs
-	p.setPen(tabText());
 	for (widgetStack::iterator it = first ; it != last ; ++it)
 	{
 		auto & currentWidgetDesc = *it;
+		const bool isActive = (it.key() == m_activeTab);
+
+		// Fond de l'onglet : actif rehaussé (plus clair), inactif plus sombre.
+		const QColor tabFace = isActive ? tabSelected() : tabInactive();
 
 		// Draw a text tab or a artwork tab.
 		if (m_usePixmap)
@@ -259,30 +308,22 @@ void TabWidget::paintEvent(QPaintEvent* pe)
 			// Get artwork
 			QPixmap artwork(embed::getIconPixmap(currentWidgetDesc.pixmap));
 
-			// Highlight active tab
-			if (it.key() == m_activeTab)
-			{
-				p.fillRect(tab_x_offset, 0, currentWidgetDesc.nwidth, m_tabbarHeight - 1, tabSelected());
-			}
+			// Onglet artwork : face + bevel FL + coins arrondis (cf. drawFlTab).
+			drawFlTab(p, QRectF(tab_x_offset, 0, currentWidgetDesc.nwidth, m_tabbarHeight - 1),
+					  tabFace, tabBevelLight(), tabBevelDark());
 
 			// Draw artwork
 			p.drawPixmap(tab_x_offset + (currentWidgetDesc.nwidth - artwork.width()) / 2, 1, artwork);
 		}
 		else
 		{
-			// Highlight tab when active
-			if (it.key() == m_activeTab)
-			{
-				p.fillRect(tab_x_offset, 2, currentWidgetDesc.nwidth - 6, m_tabbarHeight - 4, tabSelected());
-				p.setPen(tabTextSelected());
-				p.drawText(tab_x_offset + 3, m_tabheight + 1, currentWidgetDesc.name);
-			}
-			else
-			{
-				// Draw text
-				p.setPen(tabText());
-				p.drawText(tab_x_offset + 3, m_tabheight + 1, currentWidgetDesc.name);
-			}
+			// Onglet texte : face + bevel FL + coins arrondis (cf. drawFlTab).
+			drawFlTab(p, QRectF(tab_x_offset, 2, currentWidgetDesc.nwidth - 6, m_tabbarHeight - 4),
+					  tabFace, tabBevelLight(), tabBevelDark());
+
+			// Texte de l'onglet (couleur selon l'état actif/inactif).
+			p.setPen(isActive ? tabTextSelected() : tabText());
+			p.drawText(tab_x_offset + 3, m_tabheight + 1, currentWidgetDesc.name);
 		}
 
 		// Next tab's horizontal position
@@ -431,6 +472,44 @@ QColor TabWidget::tabBorder() const
 void TabWidget::setTabBorder(const QColor& c)
 {
 	m_tabBorder = c;
+}
+
+// --- Bevel FL Studio (ajout Phase 3, cf. DESIGN-UI.md §1.1/§1.3) ------------------
+
+// Return the light edge color (top/left) of the tabs' bevel
+QColor TabWidget::tabBevelLight() const
+{
+	return m_tabBevelLight;
+}
+
+// Set the light edge color (top/left) of the tabs' bevel
+void TabWidget::setTabBevelLight(const QColor& c)
+{
+	m_tabBevelLight = c;
+}
+
+// Return the dark edge color (bottom/right) of the tabs' bevel
+QColor TabWidget::tabBevelDark() const
+{
+	return m_tabBevelDark;
+}
+
+// Set the dark edge color (bottom/right) of the tabs' bevel
+void TabWidget::setTabBevelDark(const QColor& c)
+{
+	m_tabBevelDark = c;
+}
+
+// Return the background color of inactive tabs (darker than the raised active tab)
+QColor TabWidget::tabInactive() const
+{
+	return m_tabInactive;
+}
+
+// Set the background color of inactive tabs
+void TabWidget::setTabInactive(const QColor& c)
+{
+	m_tabInactive = c;
 }
 
 
