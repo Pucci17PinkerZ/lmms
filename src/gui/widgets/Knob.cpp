@@ -400,6 +400,41 @@ void Knob::drawKnob( QPainter * _p )
 	{
 		p.setRenderHint( QPainter::Antialiasing );
 
+		const QPointF center = centerPoint();
+		const float outer = outerRadius();
+
+		// FL: face sombre plate
+		if( m_faceColor.isValid() )
+		{
+			p.setBrush( m_faceColor );
+			p.setPen( Qt::NoPen );
+			p.drawEllipse( center, outer, outer );
+		}
+
+		// FL: fine couronne
+		if( m_ringColor.isValid() )
+		{
+			p.setBrush( Qt::NoBrush );
+			p.setPen( QPen( m_ringColor, 1 ) );
+			p.drawEllipse( center, outer, outer );
+		}
+
+		// FL: arc de valeur (position min -> courante)
+		if( m_valueArcColor.isValid() )
+		{
+			const float arcRadius = outer - lineWidth() - 1.0f;
+			if( arcRadius > 1.0f )
+			{
+				const QRectF arcRect( center.x() - arcRadius,
+					center.y() - arcRadius,
+					2.0f * arcRadius, 2.0f * arcRadius );
+				const int startAngle = static_cast<int>( ( 90.0 + m_totalAngle / 2.0 ) * 16 );
+				const int spanAngle = static_cast<int>( ( -m_angle - m_totalAngle / 2.0 ) * 16 );
+				p.setPen( QPen( m_valueArcColor, 2 ) );
+				p.drawArc( arcRect, startAngle, spanAngle );
+			}
+		}
+
 		// Perhaps this can move to setOuterRadius()
 		if( m_outerColor.isValid() )
 		{

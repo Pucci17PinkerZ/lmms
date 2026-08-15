@@ -64,6 +64,9 @@ class LMMS_EXPORT Knob : public FloatModelEditorBase
 	Q_PROPERTY(QColor lineInactiveColor MEMBER m_lineInactiveColor)
 	Q_PROPERTY(QColor arcActiveColor MEMBER m_arcActiveColor)
 	Q_PROPERTY(QColor arcInactiveColor MEMBER m_arcInactiveColor)
+	Q_PROPERTY(QColor faceColor MEMBER m_faceColor)
+	Q_PROPERTY(QColor ringColor MEMBER m_ringColor)
+	Q_PROPERTY(QColor valueArcColor MEMBER m_valueArcColor)
 
 	Q_PROPERTY(KnobType knobNum READ knobNum WRITE setknobNum)
 	
@@ -224,6 +227,9 @@ private:
 	float m_outerRadius;
 	float m_lineWidth;
 	QColor m_outerColor;
+	QColor m_faceColor;
+	QColor m_ringColor;
+	QColor m_valueArcColor;
 
 	QColor m_lineActiveColor;
 	QColor m_lineInactiveColor;

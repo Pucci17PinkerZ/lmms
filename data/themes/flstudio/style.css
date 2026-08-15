@@ -47,8 +47,12 @@ lmms--gui--FileBrowser QCheckBox
 }
 
 lmms--gui--Knob {
+	qproperty-lineActiveColor: rgb(210, 210, 210);
 	qproperty-lineInactiveColor: rgb(120, 120, 120);
 	qproperty-arcInactiveColor: rgba(120, 120, 120, 70);
+	qproperty-faceColor: rgb(44, 48, 50);
+	qproperty-ringColor: rgb(92, 97, 99);
+	qproperty-valueArcColor: rgb(87, 166, 74);
 }
 
 lmms--gui--AutomationEditor {
@@ -800,8 +804,8 @@ lmms--gui--PeakIndicator {
 /* persistent peak markers for fx peak meters */
 lmms--gui--Fader {
 	qproperty-peakOk: #3fbf4a;
-	qproperty-peakWarn: #d6ec52;
-	qproperty-peakClip: #c12038;
+	qproperty-peakWarn: #e6c23c;
+	qproperty-peakClip: #d43c3c;
 }
 
 lmms--gui--TimeLineWidget {
