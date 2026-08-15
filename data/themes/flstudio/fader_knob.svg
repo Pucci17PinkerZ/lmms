@@ -14,8 +14,8 @@
 		</rdf:RDF>
 	</metadata>
 	<defs>
-		<linearGradient id="a"><stop offset="0" stop-color="#1c1f24"/><stop offset="1" stop-color="#2c3138"/></linearGradient>
-		<linearGradient id="b"><stop offset="0" stop-color="#08a342"/><stop offset="1" stop-color="#0bd556"/></linearGradient>
+		<linearGradient id="a"><stop offset="0" stop-color="#3a3e3f"/><stop offset="1" stop-color="#2c3032"/></linearGradient>
+		<linearGradient id="b"><stop offset="0" stop-color="#57a64a"/><stop offset="1" stop-color="#66c566"/></linearGradient>
 		<linearGradient xlink:href="#a" id="c" x1="16" x2="16" y1="27.5" y2="4.5" gradientTransform="matrix(.52168 0 0 1.04337 3.15242 -2.19516)" gradientUnits="userSpaceOnUse"/>
 		<linearGradient xlink:href="#b" id="d" x1="4" x2="16" y1="8" y2="8" gradientTransform="translate(4.16667 11.33333) scale(.45833)" gradientUnits="userSpaceOnUse" spreadMethod="reflect"/>
 	</defs>
