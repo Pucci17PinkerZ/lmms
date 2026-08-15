@@ -27,6 +27,9 @@
 
 #include <QStyleOptionFrame>
 #include <QPainter>
+#include <QPolygonF>
+
+#include <cstdint>
 
 #include "LcdWidget.h"
 #include "DeprecationHelper.h"
@@ -36,6 +39,96 @@
 
 namespace lmms::gui
 {
+
+namespace {
+
+// 7-segment bit patterns, indexed by [0-9], then 10 = ' ', 11 = '-'.
+// Bits: A(top)=0x01, B(top-right)=0x02, C(bottom-right)=0x04, D(bottom)=0x08,
+//       E(bottom-left)=0x10, F(top-left)=0x20, G(middle)=0x40.
+constexpr std::uint8_t kSegPatterns[12] =
+{
+	0x3F, // 0
+	0x06, // 1
+	0x5B, // 2
+	0x4F, // 3
+	0x66, // 4
+	0x6D, // 5
+	0x7D, // 6
+	0x07, // 7
+	0x7F, // 8
+	0x6F, // 9
+	0x00, // ' '
+	0x40, // '-'
+};
+
+// Horizontal segment bar: left tip at (x, y + th/2), spans len, thickness th.
+QPolygonF hBar(qreal x, qreal y, qreal len, qreal th)
+{
+	const qreal t = th / 2.0;
+	QPolygonF poly;
+	poly << QPointF(x, y + t)
+	     << QPointF(x + t, y)
+	     << QPointF(x + len - t, y)
+	     << QPointF(x + len, y + t)
+	     << QPointF(x + len - t, y + th)
+	     << QPointF(x + t, y + th);
+	return poly;
+}
+
+// Vertical segment bar: top tip at (x + th/2, y), spans len, thickness th.
+QPolygonF vBar(qreal x, qreal y, qreal len, qreal th)
+{
+	const qreal t = th / 2.0;
+	QPolygonF poly;
+	poly << QPointF(x + t, y)
+	     << QPointF(x + th, y + t)
+	     << QPointF(x + th, y + len - t)
+	     << QPointF(x + t, y + len)
+	     << QPointF(x, y + len - t)
+	     << QPointF(x, y + t);
+	return poly;
+}
+
+// Draw one 7-segment digit inside cell rect c for pattern pat.
+// `on` is the lit-segment color, `off` the faint "ghost" underlay (may be transparent).
+void drawSevenSeg(QPainter& p, const QRectF& c, std::uint8_t pat, const QColor& on, const QColor& off)
+{
+	const qreal w = c.width();
+	const qreal h = c.height();
+	const qreal th = qMax<qreal>(1.5, w * 0.22); // segment thickness
+
+	const qreal hx = c.left() + th;          // horizontal inset
+	const qreal hlen = w - 2.0 * th;         // horizontal length
+	const qreal vlen = (h - 3.0 * th) / 2.0; // vertical length
+	const qreal midTop = c.top() + (h - th) / 2.0;
+	const qreal botTop = c.top() + (h + th) / 2.0;
+
+	p.setPen(Qt::NoPen);
+
+	// Ghost underlay (all 7 segments faint) for the classic FL "8" background.
+	if (off.isValid() && off.alpha() > 0)
+	{
+		p.setBrush(off);
+		p.drawPolygon(hBar(hx, c.top(), hlen, th));                  // A
+		p.drawPolygon(hBar(hx, midTop, hlen, th));                   // G
+		p.drawPolygon(hBar(hx, c.top() + h - th, hlen, th));         // D
+		p.drawPolygon(vBar(c.left(), c.top() + th, vlen, th));       // F
+		p.drawPolygon(vBar(c.left() + w - th, c.top() + th, vlen, th)); // B
+		p.drawPolygon(vBar(c.left(), botTop, vlen, th));             // E
+		p.drawPolygon(vBar(c.left() + w - th, botTop, vlen, th));    // C
+	}
+
+	p.setBrush(on);
+	if (pat & 0x01) { p.drawPolygon(hBar(hx, c.top(), hlen, th)); }                  // A
+	if (pat & 0x40) { p.drawPolygon(hBar(hx, midTop, hlen, th)); }                   // G
+	if (pat & 0x08) { p.drawPolygon(hBar(hx, c.top() + h - th, hlen, th)); }         // D
+	if (pat & 0x20) { p.drawPolygon(vBar(c.left(), c.top() + th, vlen, th)); }       // F
+	if (pat & 0x02) { p.drawPolygon(vBar(c.left() + w - th, c.top() + th, vlen, th)); } // B
+	if (pat & 0x10) { p.drawPolygon(vBar(c.left(), botTop, vlen, th)); }             // E
+	if (pat & 0x04) { p.drawPolygon(vBar(c.left() + w - th, botTop, vlen, th)); }    // C
+}
+
+} // namespace
 
 LcdWidget::LcdWidget(QWidget* parent, const QString& name, bool leadingZero) :
 	LcdWidget(1, parent, name, leadingZero)
@@ -58,6 +151,10 @@ LcdWidget::LcdWidget(int numDigits, const QString& style, QWidget* parent, const
 	m_label(),
 	m_textColor( 255, 255, 255 ),
 	m_textShadowColor( 64, 64, 64 ),
+	m_digitColor( 11, 213, 86 ),
+	m_digitOffColor( 11, 213, 86, 36 ),
+	m_digitBackgroundColor( 0, 0, 0 ),
+	m_lcdVectorial( false ),
 	m_numDigits(numDigits),
 	m_seamlessLeft(false),
 	m_seamlessRight(false),
@@ -134,9 +231,71 @@ void LcdWidget::setTextShadowColor( const QColor & c )
 
 
 
+QColor LcdWidget::digitColor() const
+{
+	return m_digitColor;
+}
+
+void LcdWidget::setDigitColor( const QColor & c )
+{
+	m_digitColor = c;
+	update();
+}
+
+
+
+
+QColor LcdWidget::digitOffColor() const
+{
+	return m_digitOffColor;
+}
+
+void LcdWidget::setDigitOffColor( const QColor & c )
+{
+	m_digitOffColor = c;
+	update();
+}
+
+
+
+
+QColor LcdWidget::digitBackgroundColor() const
+{
+	return m_digitBackgroundColor;
+}
+
+void LcdWidget::setDigitBackgroundColor( const QColor & c )
+{
+	m_digitBackgroundColor = c;
+	update();
+}
+
+
+
+
+bool LcdWidget::lcdVectorial() const
+{
+	return m_lcdVectorial;
+}
+
+void LcdWidget::setLcdVectorial( bool v )
+{
+	m_lcdVectorial = v;
+	update();
+}
+
+
+
+
 void LcdWidget::paintEvent( QPaintEvent* )
 {
 	QPainter p( this );
+
+	if (m_lcdVectorial)
+	{
+		paintVectorial(p);
+		return;
+	}
 
 	QSize cellSize( m_cellWidth, m_cellHeight );
 
@@ -206,6 +365,15 @@ void LcdWidget::paintEvent( QPaintEvent* )
 
 	p.resetTransform();
 
+	paintLabel(p);
+
+}
+
+
+
+
+void LcdWidget::paintLabel( QPainter & p )
+{
 	// Label
 	if( !m_label.isEmpty() )
 	{
@@ -219,7 +387,70 @@ void LcdWidget::paintEvent( QPaintEvent* )
 				p.fontMetrics().horizontalAdvance(m_label) / 2,
 						height() - 1, m_label);
 	}
+}
 
+
+
+
+void LcdWidget::paintVectorial( QPainter & p )
+{
+	const int margin = 1;
+
+	// LCD panel background (inside the sunken frame).
+	const QRect bg(m_seamlessLeft ? 0 : margin,
+	               margin,
+	               (m_seamlessRight ? width() : width() - margin) - (m_seamlessLeft ? 0 : margin),
+	               m_cellHeight);
+	p.fillRect(bg, m_digitBackgroundColor);
+
+	p.save();
+	p.setRenderHint(QPainter::Antialiasing, true);
+
+	if (m_seamlessLeft)
+	{
+		p.translate(0, margin);
+	}
+	else
+	{
+		p.translate(margin, margin);
+		p.translate(m_marginWidth, 0); // skip left cap space
+	}
+
+	QColor on = m_digitColor;
+	if (!isEnabled()) { on.setAlpha(qRound(on.alpha() * 0.4)); }
+	QColor off = isEnabled() ? m_digitOffColor : QColor(0, 0, 0, 0);
+
+	// Padding (leading blanks) — nothing lit, just advance.
+	for (int i = 0; i < m_numDigits - m_display.length(); ++i)
+	{
+		p.translate(m_cellWidth, 0);
+	}
+
+	// Digits.
+	for (const QChar& ch : m_display)
+	{
+		int val = ch.digitValue();
+		if (val < 0) { val = (ch == '-') ? 11 : 10; }
+		else if (val > 9) { val = 10; }
+		drawSevenSeg(p, QRectF(0, 0, m_cellWidth, m_cellHeight), kSegPatterns[val], on, off);
+		p.translate(m_cellWidth, 0);
+	}
+
+	p.restore();
+	p.resetTransform();
+
+	// Border — skipped in seamless mode (drawn by the encapsulating widget).
+	if (!m_seamlessLeft && !m_seamlessRight)
+	{
+		QStyleOptionFrame opt;
+		opt.initFrom(this);
+		opt.state = QStyle::State_Sunken;
+		opt.rect = QRect(0, 0, m_cellWidth * m_numDigits + (margin + m_marginWidth) * 2 - 1,
+		                 m_cellHeight + (margin * 2));
+		style()->drawPrimitive(QStyle::PE_Frame, &opt, &p, this);
+	}
+
+	paintLabel(p);
 }
 
 

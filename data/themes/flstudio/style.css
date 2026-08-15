@@ -55,6 +55,14 @@ lmms--gui--Knob {
 	qproperty-valueArcColor: rgb(87, 166, 74);
 }
 
+/* LCD 7-segments vectoriel (look FL : chiffres verts, fond noir, ghost subtil) */
+lmms--gui--LcdWidget {
+	qproperty-lcdVectorial: true;
+	qproperty-digitColor: #0BD556;
+	qproperty-digitOffColor: rgba(11, 213, 86, 30);
+	qproperty-digitBackgroundColor: #000000;
+}
+
 lmms--gui--AutomationEditor {
 	color: #ffffff;
 	background-color: #333739;

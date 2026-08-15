@@ -30,6 +30,8 @@
 
 #include "lmms_export.h"
 
+class QPainter;
+
 namespace lmms::gui
 {
 
@@ -40,6 +42,10 @@ class LMMS_EXPORT LcdWidget : public QWidget
 	// theming qproperties
 	Q_PROPERTY( QColor textColor READ textColor WRITE setTextColor )
 	Q_PROPERTY( QColor textShadowColor READ textShadowColor WRITE setTextShadowColor )
+	Q_PROPERTY( QColor digitColor READ digitColor WRITE setDigitColor )
+	Q_PROPERTY( QColor digitOffColor READ digitOffColor WRITE setDigitOffColor )
+	Q_PROPERTY( QColor digitBackgroundColor READ digitBackgroundColor WRITE setDigitBackgroundColor )
+	Q_PROPERTY( bool lcdVectorial READ lcdVectorial WRITE setLcdVectorial )
 	
 public:
 	explicit LcdWidget(QWidget* parent, const QString& name = QString(), bool leadingZero = false);
@@ -68,6 +74,18 @@ public:
 	QColor textShadowColor() const;
 	void setTextShadowColor( const QColor & c );
 
+	QColor digitColor() const;
+	void setDigitColor( const QColor & c );
+
+	QColor digitOffColor() const;
+	void setDigitOffColor( const QColor & c );
+
+	QColor digitBackgroundColor() const;
+	void setDigitBackgroundColor( const QColor & c );
+
+	bool lcdVectorial() const;
+	void setLcdVectorial( bool v );
+
 	int cellHeight() const { return m_cellHeight; }
 
 	void setSeamless(bool left, bool right)
@@ -86,6 +104,9 @@ protected:
 
 	virtual void updateSize();
 
+	void paintLabel( QPainter & p );
+	void paintVectorial( QPainter & p );
+
 
 private:
 
@@ -100,6 +121,11 @@ private:
 
 	QColor m_textColor;
 	QColor m_textShadowColor;
+
+	QColor m_digitColor;
+	QColor m_digitOffColor;
+	QColor m_digitBackgroundColor;
+	bool m_lcdVectorial;
 
 	int m_cellWidth;
 	int m_cellHeight;
